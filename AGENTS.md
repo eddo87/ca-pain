@@ -5,7 +5,7 @@ UO automation scripts for **ClassicAssist** (CA), the ClassicUO assistant. Repo:
 ## Runtime
 - Scripts run in CA's **IronPython 2.7** (Python 2 syntax: `except Exception, e` style works, `print` is useless — use `SysMessage`).
 - .NET is reachable: `from Assistant import Engine`, `from System.Net import WebClient`, etc.
-- API reference: the **CA wiki** (`github.com/Reetus/ClassicAssist/wiki`) — pages: Macro-Commands, Entity, Targeting, Spells, Journal, Actions, Aliases. Data files in `../Data/` (BuffIcons.json, Spells.json, Properties.json) define valid names.
+- API reference: **on-disk condensed wiki in `wiki/`** — `wiki/README.md` indexes all 21 category files (276 commands) with Pythonic signatures (`Name(arg, [optional]) -> ret`), descriptions, and single-line examples. Grep here first. Source of truth (full multi-line examples): the **CA wiki** (`github.com/Reetus/ClassicAssist/wiki`, v5.0.1). Data files in `../Data/` (BuffIcons.json, Spells.json, Properties.json) define valid names.
 
 ## How scripts are stored / run (important)
 - CA macros live **inline in `../Profiles/settings.json`** as escaped JSON strings. CA **rewrites that file from memory on save/exit** — if you hand-edit settings.json while CA is open, it gets clobbered. Close CA first.
@@ -30,10 +30,16 @@ UO automation scripts for **ClassicAssist** (CA), the ClassicUO assistant. Repo:
 |---|---|
 | `autoheal.py` | survival: auto potions (cure/heal/refresh/str/dex + apple on Mortal), datetime cooldowns, loop |
 | `panic.py` | single-pass panic potions (apple if life<X & yellow, cure, heal, refresh) |
+| `panic_heal.py` | single-pass Chivalry panic survival: pot-first with spell fallback (Remove Curse clears Mortal when apple on CD; Cleanse by Fire; Close Wounds), mana+tithe gated, CA Timer cooldowns. Run "do not interrupt", hold key |
+| `mini_heal.py` | single-pass spells-only self cure/heal. Picks school by `Skill()>40` (Chivalry preferred): Cleanse by Fire/Remove Curse/Close Wounds, else Magery Cure/Heal. No potions/timers |
+| `auto_bandage.py` | continuous-loop self bandage. Prefers hue-255 bandages, falls back to hue-0 (`FindType`/`CountType` hue arg + `UseTargetedItem("found","self")`). Reapply gated on bandage DURATION (RunUO AOS `5.0+0.5*((120-dex)/10)`s read live, dex140=4s, + finish buffer) — RunUO raises no `Healing` buff so timer is authoritative; cure potion timed ~250ms before bandage lands so it heals HP not poison, post-Mortal 1s resume. CA Timers, 100ms tick |
 | `petBall.py` | recall pets via pet balls, walk to range, cure, mount |
 | `remount.py` | self-paced auto-remount nearest non-poisoned mount; cures poisoned mount (Cure/Cleanse by Fire) |
 | `target_enemy.py` | SELECT nearest Murderer/Enemy (cycle), name overhead, set last target — no broadcast |
 | `share_target.py` | broadcast current selection once: `TARGET <name> 0x<serial>` to party/guild/alliance |
+| `throw_explosion.py` | single-pass timed explosion-potion toss at `last`: arm, wait out fuse (`THROW_DELAY` 2850ms), then `Target("last")`; aborts by lobbing the live potion `ABORT_RANGE` tiles behind self (via `Direction()` + `TargetTileOffset`) if target left `EXPLO_RANGE`. Run "do not interrupt" |
+| `throw_conflag.py` | single-pass: drop a conflag (hue 1161) on your own tile via `TargetTileOffset(0,0,0)`. No fuse — arm, `WaitForTarget`, target feet |
+| `change_weapon.py` | single-pass weapon swap to a fixed serial; `FindLayer`+`GetAlias("found")` to skip if already equipped, `Cast("Create Food")` to beat the swap delay, `EquipItem(serial, "TwoHanded")`. Ported from RazorEnhanced |
 | `focus_receiver.py` | read broadcasts (caller allow-list), set last target, announce + banner, optional melee auto-attack |
 | `focus_loader.py` | bootstrap that fetches+runs latest `focus_receiver.py` from GitHub |
 | `_diag_journal.py` | temp diagnostic: dump journal entries containing a marker (author + speech type) |
