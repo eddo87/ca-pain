@@ -42,17 +42,32 @@ def estrai_seriale(testo):
     return 0
 
 
-def caller_ammesso(voce):
-    # True se l'autore della voce e' tra i caller autorizzati (lista vuota = tutti)
+def estrai_caller(testo):
+    # ricava chi parla da testo tipo "<Alliance> PASO ADELANTE: TARGET ..."
+    # (su molti server la chat di canale arriva con name=System e il nome nel testo)
+    i = testo.find(MARCATORE)
+    if i <= 0:
+        return ""
+    prefisso = testo[:i]
+    if ">" in prefisso:                  # togli il tag canale <Alliance>/<Guild>
+        prefisso = prefisso.split(">", 1)[1]
+    prefisso = prefisso.strip()
+    if prefisso.endswith(":"):
+        prefisso = prefisso[:-1].strip()
+    return prefisso
+
+
+def caller_ammesso(voce, testo):
+    # True se l'autore (voce.Name) OPPURE chi parla nel testo e' autorizzato.
+    # Confronto esatto, cosi' "uno" non combacia con "Bruno". Lista vuota = tutti.
     if not CALLER_AMMESSI:
         return True
-    nome = voce.Name
-    if not nome:
-        return False
-    nome = nome.strip().lower()
-    for c in CALLER_AMMESSI:
-        if nome == c.strip().lower():
-            return True
+    ammessi = [a.strip().lower() for a in CALLER_AMMESSI]
+    if voce.Name and voce.Name.strip().lower() in ammessi:
+        return True
+    c = estrai_caller(testo).strip().lower()
+    if c and c in ammessi:
+        return True
     return False
 
 
@@ -63,7 +78,7 @@ def target_piu_recente():
         if voce is None:
             continue
         testo = voce.Text
-        if testo and MARCATORE in testo and caller_ammesso(voce):
+        if testo and MARCATORE in testo and caller_ammesso(voce, testo):
             seriale = estrai_seriale(testo)
     return seriale
 
