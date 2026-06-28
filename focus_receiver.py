@@ -1,5 +1,6 @@
-# Ricevitore target: legge dalla chat "TARGET ... 0x<seriale>" (inviato da
-# share_target.py), imposta l'ultimo target e mostra un banner sopra la testa.
+# Ricevitore target: legge dalla chat "TARGET <nome> 0x<seriale>" (inviato da
+# share_target.py), imposta l'ultimo target, lo annuncia nel giornale (sempre
+# visibile) e mostra un banner sopra la testa (se il target e' in vista).
 # Avviare come macro normale con Loop OFF: si autoregola.
 
 from Assistant import Engine
@@ -8,7 +9,7 @@ MARCATORE     = "TARGET"               # deve combaciare con il mittente
 AUTO_ATTACCO  = True                   # mischia: attacca da solo (entro distanza). Maghi: False.
 DISTANZA_MAX  = 0                      # 0 = nessun limite; >0 = attacca solo entro N caselle
 BANNER_FMT    = ">>> TARGET (%s) <<<"  # %s = nome del target
-BANNER_COLORE = 33                     # colore del banner
+BANNER_COLORE = 33                     # colore del banner / annuncio
 BANNER_MS     = 2000                  # ogni quanto rinfrescare il banner
 SCANSIONE_MS  = 150                   # ogni quanto leggere il giornale
 
@@ -16,10 +17,11 @@ SCANSIONE_MS  = 150                   # ogni quanto leggere il giornale
 CALLER_AMMESSI = ["PASO ADELANTE", "uno"]
 
 ultimo_seriale = 0
+ultimo_nome = "?"
 
 
 def estrai_seriale(testo):
-    # formato: "TARGET nome 0xID"  (o con apici 'nome' 'id'); ID esadecimale o decimale
+    # ID esadecimale (0x...) o decimale; gestisce anche apici 'nome' 'id'
     parti = testo.split("'")
     if len(parti) >= 3:
         token = parti[-2].strip()
@@ -42,9 +44,20 @@ def estrai_seriale(testo):
     return 0
 
 
+def estrai_nome(testo):
+    # nome del target: tutto tra "TARGET" e "0x"  (es: "... TARGET Mad Maniak 0xADBE")
+    i = testo.find(MARCATORE)
+    if i < 0:
+        return ""
+    resto = testo[i + len(MARCATORE):]
+    j = resto.find("0x")
+    if j >= 0:
+        resto = resto[:j]
+    return resto.replace("'", " ").strip()
+
+
 def estrai_caller(testo):
-    # ricava chi parla da testo tipo "<Alliance> PASO ADELANTE: TARGET ..."
-    # (su molti server la chat di canale arriva con name=System e il nome nel testo)
+    # chi parla, da testo tipo "<Alliance> PASO ADELANTE: TARGET ..." (name=System)
     i = testo.find(MARCATORE)
     if i <= 0:
         return ""
@@ -58,8 +71,7 @@ def estrai_caller(testo):
 
 
 def caller_ammesso(voce, testo):
-    # True se l'autore (voce.Name) OPPURE chi parla nel testo e' autorizzato.
-    # Confronto esatto, cosi' "uno" non combacia con "Bruno". Lista vuota = tutti.
+    # True se l'autore (voce.Name) OPPURE chi parla nel testo e' autorizzato (esatto).
     if not CALLER_AMMESSI:
         return True
     ammessi = [a.strip().lower() for a in CALLER_AMMESSI]
@@ -71,20 +83,23 @@ def caller_ammesso(voce, testo):
     return False
 
 
-def target_piu_recente():
-    # CircularBuffer non e' iterabile, ma GetEntireBuffer() restituisce un array
+def ultimo_target():
+    # (seriale, nome) dell'ultimo TARGET valido da un caller autorizzato
     seriale = 0
+    nome = ""
     for voce in Engine.Journal.GetEntireBuffer():
         if voce is None:
             continue
         testo = voce.Text
         if testo and MARCATORE in testo and caller_ammesso(voce, testo):
-            seriale = estrai_seriale(testo)
-    return seriale
+            s = estrai_seriale(testo)
+            if s:
+                seriale = s
+                nome = estrai_nome(testo)
+    return seriale, nome
 
 
 def a_portata(seriale):
-    # filtro distanza per l'attacco automatico (il tasto Ultimo Target rispetta gia' il range)
     if DISTANZA_MAX <= 0:
         return True
     try:
@@ -96,24 +111,23 @@ def a_portata(seriale):
         return False
 
 
-def mostra_banner(seriale):
-    nome = Name(seriale)
-    if not nome:
-        nome = "?"
+def mostra_banner(seriale, nome):
     HeadMsg(BANNER_FMT % nome, seriale, BANNER_COLORE)
 
 
-banner_ogni = max(1, BANNER_MS // SCANSIONE_MS)   # ogni quanti giri rinfrescare il banner
+banner_ogni = max(1, BANNER_MS // SCANSIONE_MS)
 contatore = 0
 
 while True:
-    seriale = target_piu_recente()
+    seriale, nome = ultimo_target()
 
     # nuovo target condiviso
     if seriale and seriale != ultimo_seriale:
         ultimo_seriale = seriale
-        SetLastTarget(seriale)         # ognuno preme il PROPRIO tasto "Ultimo Target"
-        mostra_banner(seriale)         # banner subito sul nuovo target
+        ultimo_nome = nome or "?"
+        SetLastTarget(seriale)
+        SysMessage(">>> TARGET: %s <<<" % ultimo_nome)   # SEMPRE visibile (anche off-screen)
+        mostra_banner(seriale, ultimo_nome)              # overhead solo se il target e' in vista
         contatore = 0
         if AUTO_ATTACCO and a_portata(seriale):
             Attack(seriale)
@@ -124,6 +138,6 @@ while True:
         if contatore >= banner_ogni:
             contatore = 0
             if FindObject(ultimo_seriale):
-                mostra_banner(ultimo_seriale)
+                mostra_banner(ultimo_seriale, ultimo_nome)
 
     Pause(SCANSIONE_MS)
