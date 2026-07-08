@@ -141,9 +141,17 @@ while True:
         # non caricato nel client. SetLastTarget() invece richiede la mobile gia' nota
         # (Engine.Mobiles.GetMobile) e fallisce per i maghi che chiamano target lontani.
         Engine.Player.LastTargetSerial = seriale
+        # se la mobile e' caricata, SetLastTarget sincronizza anche il CLIENT
+        # (ChangeCombatant): serve alle macro last-target/cast del client, non solo a CA
+        try:
+            if FindObject(seriale):
+                SetLastTarget(seriale)
+        except:
+            pass
         # se c'e' gia' un cursore da spell aperto, riempilo col target ricevuto (utile ai maghi)
         try:
             if TargetExists():
+                Pause(50)
                 Target(seriale)
         except:
             pass

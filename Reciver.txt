@@ -1,0 +1,367 @@
+from Assistant import Engine
+
+
+# =========================
+# CONFIGURAZIONE
+# =========================
+
+MARCATORE = "TARGET"
+
+AUTO_ATTACCO = False       # True = attacca automaticamente
+
+DISTANZA_MAX = 12          # 0 = nessun limite
+
+BANNER_FMT = ">>> TARGET (%s) <<<"
+
+BANNER_COLORE = 33
+
+BANNER_MS = 3000
+
+SCANSIONE_MS = 150
+
+
+# Solo questi player possono chiamare target
+# [] = tutti
+
+CALLER_AMMESSI = [
+    "PASO ADELANTE",
+    "uno"
+]
+
+
+# =========================
+# VARIABILI
+# =========================
+
+ultimo_seriale = 0
+ultimo_nome = "?"
+
+tempo_banner = 0
+
+
+
+# =========================
+# ESTRAZIONE SERIAL
+# =========================
+
+def estrai_seriale(testo):
+
+    i = testo.find("0x")
+
+    if i < 0:
+        return 0
+
+
+    cifre = ""
+
+    for c in testo[i+2:]:
+
+        if c in "0123456789abcdefABCDEF":
+            cifre += c
+        else:
+            break
+
+
+    try:
+        return int(cifre,16)
+
+    except:
+        return 0
+
+
+
+# =========================
+# ESTRAZIONE NOME
+# =========================
+
+def estrai_nome(testo):
+
+    i = testo.find(MARCATORE)
+
+    if i < 0:
+        return ""
+
+
+    nome = testo[i + len(MARCATORE):]
+
+
+    j = nome.find("0x")
+
+
+    if j >= 0:
+        nome = nome[:j]
+
+
+    return nome.replace("'"," ").strip()
+
+
+
+# =========================
+# CALLER
+# =========================
+
+def estrai_caller(testo):
+
+    i = testo.find(MARCATORE)
+
+
+    if i <= 0:
+        return ""
+
+
+    caller = testo[:i]
+
+
+    if ">" in caller:
+        caller = caller.split(">")[-1]
+
+
+    caller = caller.replace(":","")
+
+
+    return caller.strip()
+
+
+
+def caller_ammesso(voce,testo):
+
+    if not CALLER_AMMESSI:
+        return True
+
+
+    ammessi = [
+        x.lower()
+        for x in CALLER_AMMESSI
+    ]
+
+
+    if voce.Name:
+
+        if voce.Name.lower() in ammessi:
+            return True
+
+
+    caller = estrai_caller(testo)
+
+
+    if caller.lower() in ammessi:
+        return True
+
+
+    return False
+
+
+
+# =========================
+# CERCA TARGET
+# =========================
+
+def cerca_target():
+
+    seriale = 0
+    nome = ""
+
+
+    for voce in Engine.Journal.GetEntireBuffer():
+
+        if voce is None:
+            continue
+
+
+        testo = voce.Text
+
+
+        if not testo:
+            continue
+
+
+        if MARCATORE not in testo:
+            continue
+
+
+        if not caller_ammesso(voce,testo):
+            continue
+
+
+        s = estrai_seriale(testo)
+
+
+        if s:
+
+            seriale = s
+            nome = estrai_nome(testo)
+
+
+
+    return seriale,nome
+
+
+
+# =========================
+# CONTROLLO TARGET
+# =========================
+
+def target_valido(seriale):
+
+    try:
+
+        if not FindObject(seriale):
+            return False
+
+
+        if Dead(seriale):
+            return False
+
+
+        if DISTANZA_MAX > 0:
+
+            if Distance(seriale) > DISTANZA_MAX:
+                return False
+
+
+        return True
+
+
+    except:
+
+        return False
+
+
+
+# =========================
+# BANNER
+# =========================
+
+def mostra_banner(seriale,nome):
+
+    try:
+
+        if FindObject(seriale):
+
+            HeadMsg(
+                BANNER_FMT % nome,
+                seriale,
+                BANNER_COLORE
+            )
+
+    except:
+
+        pass
+
+
+
+# =========================
+# START
+# =========================
+
+ClearJournal()
+
+SysMessage(
+    "Target Receiver START"
+)
+
+
+
+# =========================
+# LOOP
+# =========================
+
+while True:
+
+
+    seriale,nome = cerca_target()
+
+
+
+    # Nuovo target ricevuto
+
+    if seriale and seriale != ultimo_seriale:
+
+
+        ultimo_seriale = seriale
+
+        ultimo_nome = nome or "?"
+
+
+
+        # =========================
+        # SET LAST TARGET
+        # =========================
+
+        SetLastTarget(seriale)
+
+
+
+        # =========================
+        # SE C'E' TARGET CURSOR
+        # USA IL TARGET RICEVUTO
+        # =========================
+
+        try:
+
+            if TargetExists():
+
+                Pause(50)
+
+                Target(seriale)
+
+
+        except:
+
+            pass
+
+
+
+        SysMessage(
+            ">>> TARGET: %s <<<"
+            % ultimo_nome
+        )
+
+
+        mostra_banner(
+            ultimo_seriale,
+            ultimo_nome
+        )
+
+
+        tempo_banner = 0
+
+
+
+        if AUTO_ATTACCO:
+
+            if target_valido(seriale):
+
+                Attack(seriale)
+
+
+
+    # =========================
+    # REFRESH BANNER
+    # =========================
+
+    if ultimo_seriale:
+
+
+        tempo_banner += SCANSIONE_MS
+
+
+        if tempo_banner >= BANNER_MS:
+
+
+            tempo_banner = 0
+
+
+            mostra_banner(
+                ultimo_seriale,
+                ultimo_nome
+            )
+
+
+
+    ClearJournal()
+
+
+    Pause(
+        SCANSIONE_MS
+    )
