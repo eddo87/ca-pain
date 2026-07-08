@@ -10,7 +10,7 @@ AUTO_ATTACCO  = True                   # mischia: attacca da solo (entro distanz
 DISTANZA_MAX  = 0                      # 0 = nessun limite; >0 = attacca solo entro N caselle
 BANNER_FMT    = ">>> TARGET (%s) <<<"  # %s = nome del target
 BANNER_COLORE = 33                     # colore del banner / annuncio
-BANNER_MS     = 2000                  # ogni quanto rinfrescare il banner
+BANNER_MS     = 2800                  # ogni quanto rinfrescare il banner
 SCANSIONE_MS  = 150                   # ogni quanto leggere il giornale
 
 # solo questi nomi possono chiamare il target (lista vuota = accetta tutti)
@@ -117,8 +117,12 @@ def mostra_banner(seriale, nome):
 
 banner_ogni = max(1, BANNER_MS // SCANSIONE_MS)
 contatore = 0
+annunciato = False
 
-ClearJournal()   # ignora i TARGET vecchi presenti all'avvio
+# baseline all'avvio: segna l'ultimo TARGET gia' presente come "gia' visto" e NON agire.
+# ClearJournal() NON serve qui: sposta solo un offset di lettura che GetEntireBuffer ignora
+# (CircularBuffer.Clear "does not actually clear it"), quindi non nasconde i vecchi TARGET.
+ultimo_seriale = ultimo_target()[0]
 
 while True:
     seriale, nome = ultimo_target()
@@ -127,22 +131,23 @@ while True:
     if seriale and seriale != ultimo_seriale:
         ultimo_seriale = seriale
         ultimo_nome = nome or "?"
-        SetLastTarget(seriale)
+        annunciato = True
+        # imposta direttamente il last target: funziona anche se il bersaglio e' fuori vista /
+        # non caricato nel client. SetLastTarget() invece richiede la mobile gia' nota
+        # (Engine.Mobiles.GetMobile) e fallisce per i maghi che chiamano target lontani.
+        Engine.Player.LastTargetSerial = seriale
         SysMessage(">>> TARGET: %s <<<" % ultimo_nome)   # SEMPRE visibile (anche off-screen)
         mostra_banner(seriale, ultimo_nome)              # overhead solo se il target e' in vista
         contatore = 0
         if AUTO_ATTACCO and a_portata(seriale):
             Attack(seriale)
 
-    # rinfresca il banner sopra la testa (solo se il target e' in vista)
-    if ultimo_seriale:
+    # rinfresca il banner sopra la testa (solo dopo un annuncio reale, solo se in vista)
+    if annunciato:
         contatore += 1
         if contatore >= banner_ogni:
             contatore = 0
             if FindObject(ultimo_seriale):
                 mostra_banner(ultimo_seriale, ultimo_nome)
 
-    # svuota: la prossima scansione vedra' solo le chiamate arrivate nel frattempo
-    # (real-time, niente ri-scansione dell'intero giornale)
-    ClearJournal()
     Pause(SCANSIONE_MS)
