@@ -118,6 +118,8 @@ def mostra_banner(seriale, nome):
 banner_ogni = max(1, BANNER_MS // SCANSIONE_MS)
 contatore = 0
 
+ClearJournal()   # ignora i TARGET vecchi presenti all'avvio
+
 while True:
     seriale, nome = ultimo_target()
 
@@ -140,4 +142,7 @@ while True:
             if FindObject(ultimo_seriale):
                 mostra_banner(ultimo_seriale, ultimo_nome)
 
+    # svuota: la prossima scansione vedra' solo le chiamate arrivate nel frattempo
+    # (real-time, niente ri-scansione dell'intero giornale)
+    ClearJournal()
     Pause(SCANSIONE_MS)
