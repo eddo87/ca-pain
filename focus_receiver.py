@@ -100,13 +100,14 @@ def ultimo_target():
 
 
 def a_portata(seriale):
-    if DISTANZA_MAX <= 0:
-        return True
     try:
         if not FindObject(seriale):
             return False
-        d = Distance(seriale)
-        return 0 <= d <= DISTANZA_MAX
+        if Dead(seriale):                 # non attaccare un cadavere
+            return False
+        if DISTANZA_MAX > 0 and Distance(seriale) > DISTANZA_MAX:
+            return False
+        return True
     except:
         return False
 
@@ -118,6 +119,10 @@ def mostra_banner(seriale, nome):
 banner_ogni = max(1, BANNER_MS // SCANSIONE_MS)
 contatore = 0
 annunciato = False
+
+# i maghi non attaccano in mischia come i guerrieri: con Magery > 99 disattivo l'auto-attacco
+if Skill("Magery") > 99:
+    AUTO_ATTACCO = False
 
 # baseline all'avvio: segna l'ultimo TARGET gia' presente come "gia' visto" e NON agire.
 # ClearJournal() NON serve qui: sposta solo un offset di lettura che GetEntireBuffer ignora
@@ -136,6 +141,12 @@ while True:
         # non caricato nel client. SetLastTarget() invece richiede la mobile gia' nota
         # (Engine.Mobiles.GetMobile) e fallisce per i maghi che chiamano target lontani.
         Engine.Player.LastTargetSerial = seriale
+        # se c'e' gia' un cursore da spell aperto, riempilo col target ricevuto (utile ai maghi)
+        try:
+            if TargetExists():
+                Target(seriale)
+        except:
+            pass
         SysMessage(">>> TARGET: %s <<<" % ultimo_nome)   # SEMPRE visibile (anche off-screen)
         mostra_banner(seriale, ultimo_nome)              # overhead solo se il target e' in vista
         contatore = 0
