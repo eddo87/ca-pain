@@ -10,6 +10,8 @@ AUTO_ATTACCO  = True                   # mischia: attacca da solo (entro distanz
 DISTANZA_MAX  = 10                      # 0 = nessun limite; >0 = attacca solo entro N caselle
 BANNER_FMT    = ">>> TARGET (%s) <<<"  # %s = nome del target
 BANNER_COLORE = 33                     # colore del banner / annuncio
+EVIDENZIA_HUE = 1173                   # rehue del target chiamato: teal/aqua (0 = disattivato)
+CALLER_HUE    = 53                     # rehue di chi chiama il target: giallo (0 = disattivato)
 BANNER_MS     = 2800                  # ogni quanto rinfrescare il banner
 SCANSIONE_MS  = 150                   # ogni quanto leggere il giornale
 
@@ -18,6 +20,7 @@ CALLER_AMMESSI = ["PASO ADELANTE", "uno"]
 
 ultimo_seriale = 0
 ultimo_nome = "?"
+caller_seriale = 0
 
 
 def estrai_seriale(testo):
@@ -83,6 +86,23 @@ def caller_ammesso(voce, testo):
     return False
 
 
+def trova_caller_seriale(voce, testo):
+    # seriale del caller cercandolo per nome tra le mobile caricate (0 se fuori vista)
+    nome = (voce.Name or "").strip()
+    if not nome or nome.lower() == "system":
+        nome = estrai_caller(testo)
+    nome = nome.strip().lower()
+    if not nome:
+        return 0
+    try:
+        for m in Engine.Mobiles.GetMobiles():
+            if m and m.Name and m.Name.strip().lower() == nome:
+                return m.Serial
+    except:
+        pass
+    return 0
+
+
 def parse_target(voce):
     # (seriale, nome) se la voce e' una chiamata TARGET valida, altrimenti (0, "")
     testo = voce.Text
@@ -139,6 +159,25 @@ while True:
             continue
 
         # nuova chiamata (anche stesso serial: ri-punta cursore e last target)
+        # evidenzia il nuovo target col rehue e ripulisce il precedente
+        if EVIDENZIA_HUE:
+            try:
+                if ultimo_seriale and ultimo_seriale != seriale:
+                    Rehue(ultimo_seriale, 0)
+                Rehue(seriale, EVIDENZIA_HUE)
+            except:
+                pass
+        # evidenzia anche il caller (se in vista), ripulendo l'eventuale caller precedente
+        if CALLER_HUE:
+            try:
+                cs = trova_caller_seriale(voce, voce.Text)
+                if cs and cs != caller_seriale:
+                    if caller_seriale:
+                        Rehue(caller_seriale, 0)
+                    Rehue(cs, CALLER_HUE)
+                    caller_seriale = cs
+            except:
+                pass
         ultimo_seriale = seriale
         ultimo_nome = nome or "?"
         annunciato = True
