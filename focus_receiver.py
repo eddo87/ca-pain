@@ -7,7 +7,7 @@ from Assistant import Engine
 
 MARCATORE     = "TARGET"               # deve combaciare con il mittente
 AUTO_ATTACCO  = True                   # mischia: attacca da solo (entro distanza). Maghi: False.
-DISTANZA_MAX  = 0                      # 0 = nessun limite; >0 = attacca solo entro N caselle
+DISTANZA_MAX  = 10                      # 0 = nessun limite; >0 = attacca solo entro N caselle
 BANNER_FMT    = ">>> TARGET (%s) <<<"  # %s = nome del target
 BANNER_COLORE = 33                     # colore del banner / annuncio
 BANNER_MS     = 2800                  # ogni quanto rinfrescare il banner
@@ -83,20 +83,17 @@ def caller_ammesso(voce, testo):
     return False
 
 
-def ultimo_target():
-    # (seriale, nome) dell'ultimo TARGET valido da un caller autorizzato
-    seriale = 0
-    nome = ""
-    for voce in Engine.Journal.GetEntireBuffer():
-        if voce is None:
-            continue
-        testo = voce.Text
-        if testo and MARCATORE in testo and caller_ammesso(voce, testo):
-            s = estrai_seriale(testo)
-            if s:
-                seriale = s
-                nome = estrai_nome(testo)
-    return seriale, nome
+def parse_target(voce):
+    # (seriale, nome) se la voce e' una chiamata TARGET valida, altrimenti (0, "")
+    testo = voce.Text
+    if not testo or MARCATORE not in testo:
+        return 0, ""
+    if not caller_ammesso(voce, testo):
+        return 0, ""
+    s = estrai_seriale(testo)
+    if not s:
+        return 0, ""
+    return s, estrai_nome(testo)
 
 
 def a_portata(seriale):
@@ -124,16 +121,24 @@ annunciato = False
 if Skill("Magery") > 99:
     AUTO_ATTACCO = False
 
-# baseline all'avvio: segna l'ultimo TARGET gia' presente come "gia' visto" e NON agire.
-# ClearJournal() NON serve qui: sposta solo un offset di lettura che GetEntireBuffer ignora
-# (CircularBuffer.Clear "does not actually clear it"), quindi non nasconde i vecchi TARGET.
-ultimo_seriale = ultimo_target()[0]
+# lettura incrementale del giornale con chiave dedicata: Read(key) consuma SOLO le
+# righe nuove (l'offset per-chiave e' quello che Clear sposta — GetEntireBuffer lo ignora).
+# Cosi': niente target vecchi all'avvio, e una RI-chiamata dello stesso serial ri-fira
+# (il dedupe per serial non la vedrebbe mai).
+BUFFER_KEY = "focus_receiver"
+Engine.Journal.Clear(BUFFER_KEY)   # salta tutto lo storico: da qui in poi solo righe nuove
 
 while True:
-    seriale, nome = ultimo_target()
+    # consuma tutte le righe arrivate dall'ultima scansione
+    while True:
+        ok, voce = Engine.Journal.Read(BUFFER_KEY)   # IronPython: out param -> tupla
+        if not ok or voce is None:
+            break
+        seriale, nome = parse_target(voce)
+        if not seriale:
+            continue
 
-    # nuovo target condiviso
-    if seriale and seriale != ultimo_seriale:
+        # nuova chiamata (anche stesso serial: ri-punta cursore e last target)
         ultimo_seriale = seriale
         ultimo_nome = nome or "?"
         annunciato = True
