@@ -20,7 +20,8 @@ HELP_INVIA    = True                   # manda HELP ME quando i TUOI hp scendono
 HELP_PCT      = 65                     # soglia: percento degli hp massimi
 HELP_HUE      = 1166                   # rosa: chi chiede aiuto viene rehue-ato per tutti (0 = off)
 HELP_COOLDOWN_MS = 8000                # minimo tra due HELP inviati
-HELP_DURATA_MS   = 10000               # per quanto resta rosa chi ha chiesto aiuto
+HELP_DURATA_MS   = 8000                # rosa: durata massima
+HELP_FINE_PCT    = 85                  # rosa: via anche prima, se gli hp risalgono oltre questa %
 
 # solo questi nomi possono chiamare il target (lista vuota = accetta tutti)
 CALLER_AMMESSI = ["PASO ADELANTE", "uno"]
@@ -160,7 +161,7 @@ Engine.Journal.Clear(BUFFER_KEY)   # salta tutto lo storico: da qui in poi solo 
 
 while True:
     # consuma tutte le righe arrivate dall'ultima scansione
-    HeadMsg('SCRIPT AGGIORNATO', 'self', 35)
+    # HeadMsg('SCRIPT AGGIORNATO', 'self', 35)
     while True:
         ok, voce = Engine.Journal.Read(BUFFER_KEY)   # IronPython: out param -> tupla
         if not ok or voce is None:
@@ -245,10 +246,19 @@ while True:
             except:
                 pass
 
-    # scaduta la durata, togli il rosa a chi aveva chiesto aiuto
+    # togli il rosa quando gli hp risalgono oltre HELP_FINE_PCT, o comunque a durata scaduta
     if help_seriale:
         help_ticks -= 1
-        if help_ticks <= 0:
+        guarito = False
+        try:
+            # Hits/MaxHits funzionano anche sugli altri (fuori party sono scalati 0-25,
+            # ma il rapporto percentuale resta valido); serve la mobile in vista
+            if FindObject(help_seriale) and MaxHits(help_seriale) > 0 and \
+                    Hits(help_seriale) * 100 > MaxHits(help_seriale) * HELP_FINE_PCT:
+                guarito = True
+        except:
+            pass
+        if guarito or help_ticks <= 0:
             try:
                 Rehue(help_seriale, 0)
             except:
