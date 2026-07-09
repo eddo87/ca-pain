@@ -15,12 +15,22 @@ CALLER_HUE    = 53                     # rehue di chi chiama il target: giallo (
 BANNER_MS     = 2800                  # ogni quanto rinfrescare il banner
 SCANSIONE_MS  = 150                   # ogni quanto leggere il giornale
 
+HELP_MARKER   = "HELP ME"              # grido d'aiuto in alliance chat
+HELP_INVIA    = True                   # manda HELP ME quando i TUOI hp scendono sotto soglia
+HELP_PCT      = 65                     # soglia: percento degli hp massimi
+HELP_HUE      = 1166                   # rosa: chi chiede aiuto viene rehue-ato per tutti (0 = off)
+HELP_COOLDOWN_MS = 8000                # minimo tra due HELP inviati
+HELP_DURATA_MS   = 10000               # per quanto resta rosa chi ha chiesto aiuto
+
 # solo questi nomi possono chiamare il target (lista vuota = accetta tutti)
 CALLER_AMMESSI = ["PASO ADELANTE", "uno"]
 
 ultimo_seriale = 0
 ultimo_nome = "?"
 caller_seriale = 0
+help_seriale = 0
+help_ticks = 0
+help_cd = 0
 
 
 def estrai_seriale(testo):
@@ -59,9 +69,9 @@ def estrai_nome(testo):
     return resto.replace("'", " ").strip()
 
 
-def estrai_caller(testo):
+def estrai_caller(testo, marcatore=MARCATORE):
     # chi parla, da testo tipo "<Alliance> PASO ADELANTE: TARGET ..." (name=System)
-    i = testo.find(MARCATORE)
+    i = testo.find(marcatore)
     if i <= 0:
         return ""
     prefisso = testo[:i]
@@ -86,11 +96,11 @@ def caller_ammesso(voce, testo):
     return False
 
 
-def trova_caller_seriale(voce, testo):
+def trova_caller_seriale(voce, testo, marcatore=MARCATORE):
     # seriale del caller cercandolo per nome tra le mobile caricate (0 se fuori vista)
     nome = (voce.Name or "").strip()
     if not nome or nome.lower() == "system":
-        nome = estrai_caller(testo)
+        nome = estrai_caller(testo, marcatore)
     nome = nome.strip().lower()
     if not nome:
         return 0
@@ -155,6 +165,22 @@ while True:
         ok, voce = Engine.Journal.Read(BUFFER_KEY)   # IronPython: out param -> tupla
         if not ok or voce is None:
             break
+        # grido d'aiuto: rehue ROSA chi lo manda (per tutti quelli che girano il receiver)
+        testo_v = voce.Text or ""
+        if HELP_HUE and HELP_MARKER in testo_v:
+            try:
+                hs = trova_caller_seriale(voce, testo_v, HELP_MARKER)
+                if hs:
+                    if help_seriale and help_seriale != hs:
+                        Rehue(help_seriale, 0)
+                    Rehue(hs, HELP_HUE)
+                    help_seriale = hs
+                    help_ticks = max(1, HELP_DURATA_MS // SCANSIONE_MS)
+                    SysMessage(">>> HELP <<<", HELP_HUE)
+            except:
+                pass
+            continue
+
         seriale, nome = parse_target(voce)
         if not seriale:
             continue
@@ -205,6 +231,29 @@ while True:
         contatore = 0
         if AUTO_ATTACCO and a_portata(seriale):
             Attack(seriale)
+
+    # HP bassi? grida aiuto in alliance (percentuale: vale per qualsiasi build)
+    if HELP_INVIA:
+        if help_cd > 0:
+            help_cd -= 1
+        else:
+            try:
+                if not Dead("self") and MaxHits("self") > 0 and \
+                        Hits("self") * 100 < MaxHits("self") * HELP_PCT:
+                    AllyMsg(HELP_MARKER)
+                    help_cd = max(1, HELP_COOLDOWN_MS // SCANSIONE_MS)
+            except:
+                pass
+
+    # scaduta la durata, togli il rosa a chi aveva chiesto aiuto
+    if help_seriale:
+        help_ticks -= 1
+        if help_ticks <= 0:
+            try:
+                Rehue(help_seriale, 0)
+            except:
+                pass
+            help_seriale = 0
 
     # rinfresca il banner sopra la testa (solo dopo un annuncio reale, solo se in vista)
     if annunciato:
