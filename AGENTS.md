@@ -39,6 +39,7 @@ UO automation scripts for **ClassicAssist** (CA), the ClassicUO assistant. Repo:
 | `share_target.py` | broadcast current selection once: `TARGET <name> 0x<serial>` to party/guild/alliance |
 | `throw_explosion.py` | single-pass timed explosion-potion toss at `last`: arm, wait out fuse (`THROW_DELAY` 2850ms), then `Target("last")`; aborts by lobbing the live potion `ABORT_RANGE` tiles behind self (via `Direction()` + `TargetTileOffset`) if target left `EXPLO_RANGE`. Run "do not interrupt" |
 | `throw_conflag.py` | single-pass: drop a conflag (hue 1161) on your own tile via `TargetTileOffset(0,0,0)`. No fuse — arm, `WaitForTarget`, target feet |
+| `rapid_explo.py` | self-looping rapid-fire explo at last target's GROUND tile (`TargetXYZ(X/Y/Z("last"))`, coords read per-throw). No fuse hold; aborts armed potion behind self if target lost |
 | `change_weapon.py` | single-pass weapon swap to a fixed serial; `FindLayer`+`GetAlias("found")` to skip if already equipped, `Cast("Create Food")` to beat the swap delay, `EquipItem(serial, "TwoHanded")`. Ported from RazorEnhanced |
 | `focus_receiver.py` | read broadcasts (caller allow-list), set last target, announce + banner, optional melee auto-attack |
 | `focus_loader.py` | bootstrap that fetches+runs latest `focus_receiver.py` from GitHub |

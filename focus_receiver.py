@@ -150,6 +150,7 @@ Engine.Journal.Clear(BUFFER_KEY)   # salta tutto lo storico: da qui in poi solo 
 
 while True:
     # consuma tutte le righe arrivate dall'ultima scansione
+    HeadMsg('SCRIPT AGGIORNATO', 'self', 35)
     while True:
         ok, voce = Engine.Journal.Read(BUFFER_KEY)   # IronPython: out param -> tupla
         if not ok or voce is None:
